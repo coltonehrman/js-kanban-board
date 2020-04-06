@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Board</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100%;
+            padding-top: 30px;
+            font-size: 0;
+        }
+
+        .card {
+            display: inline-block;
+            box-sizing: border-box;
+            width: 25%;
+            font-size: 1rem;
+            padding: 15px;
+            vertical-align: top;
+        }
+
+        .card:first-of-type {
+            padding-left: 30px;
+        }
+
+        .card:last-of-type {
+            padding-right: 30px;
+        }
+
+        .card-title {
+            text-align: center;
+            color: white;
+            padding: 5px;
+            border-radius: 3px 3px 0 0;
+            font-size: 1.25rem;
+        }
+
+        .card:nth-of-type(1) .card-title {
+            background-color: #35235D;
+        }
+
+        .card:nth-of-type(2) .card-title {
+            background-color: #CB2402;
+        }
+
+        .card:nth-of-type(3) .card-title {
+            background-color: #4C49A2;
+        }
+
+        .card:nth-of-type(4) .card-title {
+            background-color: #A31A48;
+        }
+
+        .card-todo {
+            background: #eaeaea;
+            padding: 5px 7px;
+            display: flex;
+            overflow: scroll;
+        }
+
+        .card-todo:not(:first-child):not(:last-child) {
+            margin-bottom: 5px;
+        }
+
+        .card-todo:nth-of-type(2) {
+            margin-top: 5px;
+        }
+
+        .card-todo-text {
+            padding: 0 5px;
+            flex: 10;
+        }
+
+        .card-todo-delete {
+            flex: 1;
+        }
+
+        .card-todo-left, .card-todo-right {
+            flex: 1;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .card-todo-left.hidden, .card-todo-right.hidden {
+            display: none;
+        }
+
+        .card-todo .card-todo-right {
+            text-align: right;
+        }
+
+        .card-add {
+            font-size: 0;
+            border: 1px solid #eaeaea;
+            border-top: 0;
+            border-radius: 0 0 3px 3px;
+            height: 30px;
+        }
+
+        .card-input {
+            box-sizing: border-box;
+            display: inline-block;
+            border: 0;
+            padding: 5px 10px;
+            font-size: 0.75rem;
+            width: 75%;
+        }
+
+        .card-input:focus {
+            outline: 0;
+        }
+
+        .card-submit {
+            cursor: pointer;
+            box-sizing: border-box;
+            border: 0;
+            border-left: 1px solid #eaeaea;
+            padding: 0;
+            background-color: transparent;
+            display: inline-block;
+            font-size: 1rem;
+            width: 25%;
+            height: 100%;
+        }
+
+        .card-submit:focus {
+            outline: 0;
+        }
+
+        .undo-btn {
+            cursor: pointer;
+            box-sizing: border-box;
+            position: fixed;
+            border-radius: 50%;
+            border: 1px solid #eaeaea;
+            bottom: 15px;
+            right: 15px;
+            width: 75px;
+            height: 75px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .undo-btn:hover {
+            border-width: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container"></div>
+
+    <script>
+        (() => {
+            const $ = document.querySelector.bind(document);
+
+            function createElement(html) {
+                const $div = document.createElement('div');
+                $div.innerHTML = html.trim();
+                return $div.firstChild;
+            }
+
+            function KanbanBoard(cards) {
+                // Private variables
+                let _cards = [];
+                let _actions = [];
+
+                const $undoBtn = createElement(`
+                <div class="undo-btn">UNDO</div>
+                `);
+
+                const showUndoBtn = () => document.body.append($undoBtn);
+                const hideUndoBtn = () => $undoBtn.parentNode.removeChild($undoBtn);
+
+                const undoAction = (action) => {
+                    const { type, cardIndex, todoIndex, from, to, index, todo } = action;
+                    let todoObj;
+
+                    switch (type) {
+                        case 'add':
+                            todoObj = _cards[cardIndex].getTodo(todoIndex);
+                            _cards[cardIndex].removeTodo(todoObj);
+                            delete todo;
+                            break;
+                        case 'move':
+                            todoObj = _cards[to].getTodo(index);
+                            _cards[to].removeTodo(todoObj);
+                            _cards[from].moveTodo(todoObj);
+                            break;
+                        default:
+                            console.log(`unknown actions: ${type}`);
+                    }
+                };
+
+                $undoBtn.addEventListener('click', () => {
+                    const lastAction = _actions.pop();
+                    undoAction(lastAction);
+                    this.addAction();
+                    this.saveState();
+                });
+
+                // Instance methods
+                this.prevCard = (index) => _cards[index - 1];
+                this.nextCard = (index) => _cards[index + 1];
+
+                this.addAction = (newActions) => {
+                    if (newActions)
+                        _actions = _actions.concat(newActions);
+                    
+                    (_actions.length > 0) ?
+                        showUndoBtn() :
+                        hideUndoBtn();
+                };
+
+                this.saveState = () => {
+                    localStorage.setItem('actions', JSON.stringify(_actions));
+                    localStorage.setItem('cards', JSON.stringify(_cards.map(c => c.toJSON())));
+                };
+
+                this.getLocalCards = () => {
+                    let localCards = JSON.parse(localStorage.getItem('cards'));
+                    localCards = localCards.map(c => JSON.parse(c));
+                    localCards.forEach((c, c_i) => {
+                        const newCard = new Card({
+                            i: c_i,
+                            total: localCards.length,
+                            parent: this,
+                        }, c.title);
+
+                        _cards.push(newCard);
+                        
+                        c.todos.map(t => JSON.parse(t)).forEach((t, t_i) => {
+                            const newTodo = new Todo({
+                                parent: newCard,
+                                $parent: newCard.element(),
+                            }, t.text, c_i > 0, (c_i + 1) < localCards.length);
+
+                            newCard.addTodo(newTodo);
+                        });
+                    });
+                };
+
+                this.getLocalActions = () => {
+                    let localActions = JSON.parse(localStorage.getItem('actions'));
+                    _actions = localActions;
+                    this.addAction();
+                };
+
+                // Create localstorage item if not already there
+                if (!localStorage.getItem('actions')) {
+                    localStorage.setItem('actions', JSON.stringify(_actions));
+                } else {
+                    this.getLocalActions();
+                }
+
+                if (!localStorage.getItem('cards')) {
+                    _cards = cards.map((title, i) =>
+                        new Card({
+                            i,
+                            total: cards.length,
+                            parent: this,
+                        }, title)
+                    );
+
+                    localStorage.setItem('cards', JSON.stringify(_cards.map(c => c.toJSON())));
+                } else {
+                    this.getLocalCards();
+                }
+            }
+
+            function Card(context, title) {
+                // Private variables
+                const { i, total, parent } = context;
+
+                let _todos = [];
+
+                const $el = createElement(`
+                    <div class="card">
+                        <div class="card-title">${title}</div>
+                        <div class="card-body"></div>
+                        <div class="card-add">
+                            <input class="card-input" type="text" />
+                            <button class="card-submit">+</button>
+                        </div>
+                    </div>
+                `);
+
+                // Private methods
+                const createTodo = (text) => {
+                    return new Todo({
+                        parent: this,
+                        $parent: $el,
+                    }, text, i > 0, (i + 1) < total);
+                };
+
+                const newTodo = () => {
+                    const $input = $el.querySelector('.card-input')
+                    const input = $input.value.trim();
+
+                    if (input !== '') {
+                        const todo = createTodo(input);
+                        
+                        $input.value = '';
+                        $input.focus();
+
+                        _todos.push(todo);
+
+                        $el.querySelector('.card-body').append(todo.element());
+                        parent.addAction([{ type: 'add', cardIndex: i, todoIndex: _todos.length - 1, todo: todo.text() }]);
+                        parent.saveState();
+                    }
+                };
+
+                // Intance methods
+                this.parent = () => parent;
+                this.element = () => $el;
+                this.totalTodos = () => _todos.length;
+                this.getTodo = (index) => _todos[index];
+
+                this.removeTodo = (todo) => {
+                    todo.removeElement();
+                    _todos = _todos.filter(t => t !== todo);
+                    return todo;
+                };
+
+                this.addTodo = (todo) => {
+                    $el.querySelector('.card-body').append(todo.element());
+                    _todos.push(todo);
+                    return todo;
+                };
+
+                this.moveTodo = (todo) => {
+                    todo.move({ to: this, left: i > 0, right: (i + 1) < total });
+                    this.addTodo(todo);
+                    // $el.querySelector('.card-body').append(todo.element());
+                    // _todos.push(todo);
+                    return todo;
+                };
+
+                this.moveLeft = (todo) => {
+                    const newCard = parent.prevCard(i);
+                    const newTodo = newCard.moveTodo(this.removeTodo(todo));
+
+                    parent.addAction([{ type: 'move', from: i, to: i - 1, index: newCard.totalTodos() - 1, todo: newTodo.text() }]);
+                    parent.saveState();
+                };
+
+                this.moveRight = (todo) => {
+                    const newCard = parent.nextCard(i);
+                    const newTodo = newCard.moveTodo(this.removeTodo(todo));
+
+                    parent.addAction([{ type: 'move', from: i, to: i + 1, index: newCard.totalTodos() - 1, todo: newTodo.text() }]);
+                    parent.saveState();
+                };
+
+                this.toJSON = () => JSON.stringify({
+                    title,
+                    todos: _todos.map(t => t.toJSON()),
+                });
+
+                // add to DOM
+                $('.container').append($el);
+
+                // setup event handlers
+                $el.querySelector('.card-submit').addEventListener('click', newTodo);
+                $el.querySelector('.card-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' || e.keyCode === 13 || e.which === 13) {
+                        newTodo();
+                    }
+                });
+            }
+
+            function Todo(context, text, left, right) {
+                // Private variables
+                let { parent, $parent } = context;
+
+                const $el = createElement(`
+                    <div class="card-todo">
+                        <div class="card-todo-left${(left) ? '' : ' hidden'}">&lt;</div>
+                        <div class="card-todo-text">${text}</div>
+                        <button class="card-todo-delete">-</button>
+                        <div class="card-todo-right${(right) ? '' : ' hidden'}">&gt;</div>
+                    </div>
+                `);
+
+                // Instance methods
+                this.text = () => text;
+                this.element = () => $el;
+
+                this.move = ({ to, left, right }) => {
+                    const $leftArrow = $el.querySelector('.card-todo-left');
+                    const $rightArrow = $el.querySelector('.card-todo-right');
+
+                    (left) ?
+                        $leftArrow.classList.remove('hidden') :
+                        $leftArrow.classList.add('hidden');
+                    (right) ?
+                        $rightArrow.classList.remove('hidden') :
+                        $rightArrow.classList.add('hidden');
+
+                    parent = to;
+                };
+
+                this.removeElement = () => {
+                    $el.parentNode.removeChild($el);
+                    return $el;
+                };
+
+                this.toJSON = () => JSON.stringify({
+                    text: text,
+                });
+
+                // setup event handlers
+                $el.querySelector('.card-todo-delete')
+                    .addEventListener('click', () => {
+                        parent.removeTodo(this);
+                        parent.parent().saveState();
+                        // console.log(parent);
+                        // parent.parent.saveState();
+                    });
+                $el.querySelector('.card-todo-left')
+                    .addEventListener('click', () => parent.moveLeft(this));
+                $el.querySelector('.card-todo-right')
+                    .addEventListener('click', () => parent.moveRight(this));
+            }
+
+            window.onload = () => {
+                new KanbanBoard([ 'To-Do', 'Doing', 'Done', 'Approved' ]);
+            };
+        })();
+    </script>
+</body>
+</html>
