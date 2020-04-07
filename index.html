@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kanban Board</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css" integrity="sha256-h20CPZ0QyXlBuAw7A+KluUYx/3pK+c7lYEpqLTlxjYQ=" crossorigin="anonymous" />
+
     <style>
         body {
             margin: 0;
@@ -83,10 +86,14 @@
 
         .card-todo-delete {
             flex: 1;
+            cursor: pointer;
+            color: red;
+            border: 0;
+            border-radius: 3px;
         }
 
         .card-todo-left, .card-todo-right {
-            flex: 1;
+            flex: 1.5;
             cursor: pointer;
             text-align: left;
         }
@@ -128,7 +135,7 @@
             padding: 0;
             background-color: transparent;
             display: inline-block;
-            font-size: 1rem;
+            font-size: 0.75rem;
             width: 25%;
             height: 100%;
         }
@@ -196,6 +203,13 @@
                             todoObj = _cards[to].getTodo(index);
                             _cards[to].removeTodo(todoObj);
                             _cards[from].moveTodo(todoObj);
+                            break;
+                        case 'delete':
+                            todoObj = new Todo({
+                                parent: _cards[cardIndex],
+                                $parent: _cards[cardIndex].element(),
+                            }, todo, cardIndex > 0, (cardIndex + 1) < _cards.length);
+                            _cards[cardIndex].addTodo(todoObj);
                             break;
                         default:
                             console.log(`unknown actions: ${type}`);
@@ -290,7 +304,7 @@
                         <div class="card-body"></div>
                         <div class="card-add">
                             <input class="card-input" type="text" />
-                            <button class="card-submit">+</button>
+                            <button class="card-submit">Submit</button>
                         </div>
                     </div>
                 `);
@@ -322,10 +336,13 @@
                 };
 
                 // Intance methods
+                this.cardIndex = () => i;
                 this.parent = () => parent;
                 this.element = () => $el;
                 this.totalTodos = () => _todos.length;
                 this.getTodo = (index) => _todos[index];
+
+                this.getTodoIndex = (todo) => _todos.indexOf(todo);
 
                 this.removeTodo = (todo) => {
                     todo.removeElement();
@@ -342,8 +359,6 @@
                 this.moveTodo = (todo) => {
                     todo.move({ to: this, left: i > 0, right: (i + 1) < total });
                     this.addTodo(todo);
-                    // $el.querySelector('.card-body').append(todo.element());
-                    // _todos.push(todo);
                     return todo;
                 };
 
@@ -386,10 +401,10 @@
 
                 const $el = createElement(`
                     <div class="card-todo">
-                        <div class="card-todo-left${(left) ? '' : ' hidden'}">&lt;</div>
+                        <div class="card-todo-left${(left) ? '' : ' hidden'}"><i class="fas fa-chevron-left"></i></div>
                         <div class="card-todo-text">${text}</div>
-                        <button class="card-todo-delete">-</button>
-                        <div class="card-todo-right${(right) ? '' : ' hidden'}">&gt;</div>
+                        <button class="card-todo-delete"><i class="far fa-trash-alt"></i></button>
+                        <div class="card-todo-right${(right) ? '' : ' hidden'}"><i class="fas fa-chevron-right"></i></div>
                     </div>
                 `);
 
@@ -423,10 +438,10 @@
                 // setup event handlers
                 $el.querySelector('.card-todo-delete')
                     .addEventListener('click', () => {
+                        const todoIndex = parent.getTodoIndex(this);
                         parent.removeTodo(this);
+                        parent.parent().addAction({ type: 'delete', cardIndex: parent.cardIndex(), todoIndex, todo: text });
                         parent.parent().saveState();
-                        // console.log(parent);
-                        // parent.parent.saveState();
                     });
                 $el.querySelector('.card-todo-left')
                     .addEventListener('click', () => parent.moveLeft(this));
